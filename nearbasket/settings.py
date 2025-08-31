@@ -150,6 +150,14 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# Alternative WhiteNoise configuration
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# WhiteNoise configuration
+WHITENOISE_STATIC_PREFIX = '/static/'
+WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+
 # Media files (for future use if needed)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

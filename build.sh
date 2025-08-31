@@ -8,6 +8,9 @@ pip install -r requirements.txt
 # Run migrations
 python manage.py migrate
 
+# Collect static files
+python manage.py collectstatic --noinput --clear
+
 # Create superuser if it doesn't exist
 echo "Creating superuser..."
 python manage.py shell << EOF
