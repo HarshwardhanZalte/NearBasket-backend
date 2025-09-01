@@ -1,0 +1,57 @@
+# .github/workflows/deploy.yml
+name: 🚀 Deploy NearBasket
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Render
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+
+    - name: 💬 Notify Deployment Start
+      run: |
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "🚀 *NearBasket Deployment Started*\n\n🌿 Branch: `${{ github.ref_name }}`\n👤 By: ${{ github.actor }}\n📝 Commit: `${{ github.event.head_commit.message }}`\n\n📊 <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Progress>"
+          }' \
+          "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}"
+
+    - name: 🚀 Trigger Render Deployment
+      run: |
+        curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+    - name: ⏳ Wait for Deployment
+      run: |
+        echo "Waiting for deployment to complete..."
+        sleep 120  # Wait 2 minutes
+
+    - name: 💬 Notify Deployment Success
+      if: success()
+      run: |
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "✅ *NearBasket Deployment Successful*\n\n🌿 Branch: `${{ github.ref_name }}`\n👤 By: ${{ github.actor }}\n⏱️ Duration: ~2 minutes\n\n📊 <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
+          }' \
+          "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}"
+
+    - name: 💬 Notify Deployment Failure
+      if: failure()
+      run: |
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "❌ *NearBasket Deployment Failed*\n\n🌿 Branch: `${{ github.ref_name }}`\n👤 By: ${{ github.actor }}\n💥 Status: Failed\n\n📊 <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
+          }' \
+          "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}"
