@@ -1,0 +1,158 @@
+# .github/workflows/ci-cd.yml
+
+name: Nearbasket CI/CD on Render
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-test-deploy:
+    name: Build, Test and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8
+
+      - name: Lint with Flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      # [MODIFIED] Replaced the old action with a direct curl command
+      - name: Notify Google Chat - In Progress
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+          --data '{
+            "cardsV2": [{
+              "cardId": "deployment-status",
+              "card": {
+                "header": {
+                  "title": "Deployment Started 🚀",
+                  "subtitle": "nearbasket-app",
+                  "imageUrl": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                  "imageType": "CIRCLE"
+                },
+                "sections": [{
+                  "widgets": [{
+                    "textParagraph": {
+                      "text": "A new deployment has been initiated by <b>${{ github.actor }}</b>."
+                    }
+                  }, {
+                    "keyValue": {
+                      "topLabel": "Commit Message",
+                      "content": "${{ github.event.head_commit.message }}"
+                    }
+                  }, {
+                    "buttons": [{
+                      "textButton": {
+                        "text": "VIEW COMMIT",
+                        "onClick": {
+                          "openLink": {
+                            "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+                          }
+                        }
+                      }
+                    }]
+                  }]
+                }]
+              }
+            }]
+          }' \
+          ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+
+      - name: Trigger Render Deploy
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: curl "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      # [MODIFIED] Replaced the old action with a direct curl command for success
+      - name: Notify Google Chat - Success
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+          --data '{
+            "cardsV2": [{
+              "cardId": "deployment-status",
+              "card": {
+                "header": {
+                  "title": "Deployment Successful ✅",
+                  "subtitle": "nearbasket-app",
+                  "imageUrl": "https://ssl.gstatic.com/dynamite/images/cards/check_circle_green.png",
+                  "imageType": "CIRCLE"
+                },
+                "sections": [{
+                  "widgets": [{
+                    "textParagraph": {
+                      "text": "The latest changes are now live!"
+                    }
+                  }, {
+                    "buttons": [{
+                      "textButton": {
+                        "text": "VIEW WORKFLOW RUN",
+                        "onClick": {
+                          "openLink": {
+                            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                          }
+                        }
+                      }
+                    }]
+                  }]
+                }]
+              }
+            }]
+          }' \
+          ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+
+      # [MODIFIED] Replaced the old action with a direct curl command for failure
+      - name: Notify Google Chat - Failure
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+          --data '{
+            "cardsV2": [{
+              "cardId": "deployment-status",
+              "card": {
+                "header": {
+                  "title": "Deployment Failed ❌",
+                  "subtitle": "nearbasket-app",
+                  "imageUrl": "https://ssl.gstatic.com/dynamite/images/cards/cancel_red.png",
+                  "imageType": "CIRCLE"
+                },
+                "sections": [{
+                  "widgets": [{
+                    "textParagraph": {
+                      "text": "The deployment failed. Please check the logs for details."
+                    }
+                  }, {
+                    "buttons": [{
+                      "textButton": {
+                        "text": "VIEW WORKFLOW RUN",
+                        "onClick": {
+                          "openLink": {
+                            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                          }
+                        }
+                      }
+                    }]
+                  }]
+                }]
+              }
+            }]
+          }' \
+          ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
