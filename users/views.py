@@ -7,6 +7,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, OTP
+from twilio.rest import Client
+from django.conf import settings
 from .serializers import (
     UserRegistrationSerializer, 
     UserProfileSerializer, 
@@ -53,6 +55,16 @@ def send_otp(request):
             otp_code = generate_otp()
             OTP.objects.filter(user=user, is_verified=False).delete()  # Remove old unverified OTPs
             otp = OTP.objects.create(user=user, otp_code=otp_code)
+            
+            account_sid = settings.TWILIO_ACCOUNT_SID
+            auth_token = settings.TWILIO_AUTH_TOKEN
+            client = Client(account_sid, auth_token)
+            message = client.messages.create(
+                from_=settings.TWILIO_PHONE_NUMBER,
+                body=f"Your NearBasket OTP is: {otp_code}",
+                to=f"+91{mobile_number}"
+            )
+            print(message.sid)
             
             # In production, send SMS here
             print(f"OTP for {mobile_number}: {otp_code}")  # For development
