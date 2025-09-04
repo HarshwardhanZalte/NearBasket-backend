@@ -11,20 +11,17 @@ class ShopSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'address', 'description', 'shop_logo_url', 
                  'shop_id', 'created_at', 'owner_name']
         read_only_fields = ['id', 'shop_id', 'created_at', 'owner_name']
+
+class ShopUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating shop information (shopkeeper only)"""
+    class Meta:
+        model = Shop
+        fields = ['name', 'address', 'description', 'shop_logo_url']
     
     def validate_name(self, value):
         if not value.strip():
             raise serializers.ValidationError("Shop name cannot be empty")
         return value
-
-class ShopCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Shop
-        fields = ['name', 'address', 'description', 'shop_logo_url']
-    
-    def create(self, validated_data):
-        validated_data['owner'] = self.context['request'].user
-        return super().create(validated_data)
 
 class ShopCustomerSerializer(serializers.ModelSerializer):
     customer = UserProfileSerializer(read_only=True)
