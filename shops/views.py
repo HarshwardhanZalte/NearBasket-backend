@@ -6,91 +6,78 @@ from django.shortcuts import get_object_or_404
 from .models import Shop, ShopCustomer
 from .serializers import (
     ShopSerializer, 
-    ShopCreateSerializer, 
+    ShopUpdateSerializer,
     ShopCustomerSerializer, 
     AddCustomerSerializer,
+    UserProfileSerializer
 )
-from users.serializers import UserProfileSerializer
 from users.models import User
 
-@api_view(['GET', 'POST'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def shop_list_create(request):
-    if request.method == 'GET':
-        if request.user.role == 'SHOPKEEPER':
-            shops = Shop.objects.filter(owner=request.user)
-        else:
-            # Customers see shops they've joined
-            shop_customers = ShopCustomer.objects.filter(customer=request.user)
-            shops = [sc.shop for sc in shop_customers]
-        
+def get_my_shop(request):
+    """Get shopkeeper's shop or customer's joined shops"""
+    if request.user.role == 'SHOPKEEPER':
+        try:
+            shop = request.user.shop
+            serializer = ShopSerializer(shop)
+            return Response(serializer.data)
+        except Shop.DoesNotExist:
+            return Response({
+                'error': 'No shop found for this shopkeeper'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    elif request.user.role == 'CUSTOMER':
+        # Return shops the customer has joined
+        shop_customers = ShopCustomer.objects.filter(customer=request.user)
+        shops = [sc.shop for sc in shop_customers]
         serializer = ShopSerializer(shops, many=True)
         return Response(serializer.data)
     
-    elif request.method == 'POST':
-        if request.user.role != 'SHOPKEEPER':
-            return Response({
-                'error': 'Only shopkeepers can create shops'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = ShopCreateSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            shop = serializer.save()
-            return Response(ShopSerializer(shop).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    return Response({
+        'error': 'Invalid user role'
+    }, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET', 'PUT', 'DELETE'])
+@api_view(['PUT'])
 @permission_classes([IsAuthenticated])
-def shop_detail(request, pk):
-    shop = get_object_or_404(Shop, pk=pk)
-    
-    if request.method == 'GET':
-        # Check if user has access to this shop
-        if request.user.role == 'SHOPKEEPER' and shop.owner != request.user:
-            return Response({
-                'error': 'Access denied'
-            }, status=status.HTTP_403_FORBIDDEN)
-        elif request.user.role == 'CUSTOMER':
-            if not ShopCustomer.objects.filter(shop=shop, customer=request.user).exists():
-                return Response({
-                    'error': 'You are not a customer of this shop'
-                }, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = ShopSerializer(shop)
-        return Response(serializer.data)
-    
-    elif request.method == 'PUT':
-        if shop.owner != request.user:
-            return Response({
-                'error': 'Only shop owner can update shop'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = ShopSerializer(shop, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    elif request.method == 'DELETE':
-        if shop.owner != request.user:
-            return Response({
-                'error': 'Only shop owner can delete shop'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        shop.delete()
+def update_my_shop(request):
+    """Update shopkeeper's shop information"""
+    if request.user.role != 'SHOPKEEPER':
         return Response({
-            'message': 'Shop deleted successfully'
-        }, status=status.HTTP_204_NO_CONTENT)
+            'error': 'Only shopkeepers can update shop information'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        shop = request.user.shop
+    except Shop.DoesNotExist:
+        return Response({
+            'error': 'No shop found for this shopkeeper'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = ShopUpdateSerializer(shop, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(ShopSerializer(shop).data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def shop_detail(request, shop_id):
+    """Get shop details by shop_id (for customers to view before joining)"""
+    shop = get_object_or_404(Shop, shop_id=shop_id)
+    serializer = ShopSerializer(shop)
+    return Response(serializer.data)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def join_shop(request, pk):
+def join_shop(request, shop_id):
+    """Customer joins a shop using shop_id"""
     if request.user.role != 'CUSTOMER':
         return Response({
             'error': 'Only customers can join shops'
         }, status=status.HTTP_403_FORBIDDEN)
     
-    shop = get_object_or_404(Shop, shop_id=pk)  # Use shop_id for joining
+    shop = get_object_or_404(Shop, shop_id=shop_id)
     
     if ShopCustomer.objects.filter(shop=shop, customer=request.user).exists():
         return Response({
@@ -105,17 +92,23 @@ def join_shop(request, pk):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def add_customer(request, pk):
-    shop = get_object_or_404(Shop, pk=pk)
-    
-    if shop.owner != request.user:
+def add_customer(request):
+    """Shopkeeper adds customer to their shop by mobile number"""
+    if request.user.role != 'SHOPKEEPER':
         return Response({
-            'error': 'Only shop owner can add customers'
+            'error': 'Only shopkeepers can add customers'
         }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        shop = request.user.shop
+    except Shop.DoesNotExist:
+        return Response({
+            'error': 'No shop found for this shopkeeper'
+        }, status=status.HTTP_404_NOT_FOUND)
     
     serializer = AddCustomerSerializer(data=request.data)
     if serializer.is_valid() and serializer.validated_data is not None:
-        mobile_number = serializer.validated_data['mobile_number']
+        mobile_number = serializer.validated_data.get('mobile_number')
         if not mobile_number:
             return Response({
                 'error': 'Mobile number is required'
@@ -142,13 +135,19 @@ def add_customer(request, pk):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def shop_customers(request, pk):
-    shop = get_object_or_404(Shop, pk=pk)
-    
-    if shop.owner != request.user:
+def shop_customers(request):
+    """Get list of customers for shopkeeper's shop"""
+    if request.user.role != 'SHOPKEEPER':
         return Response({
-            'error': 'Only shop owner can view customers'
+            'error': 'Only shopkeepers can view shop customers'
         }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        shop = request.user.shop
+    except Shop.DoesNotExist:
+        return Response({
+            'error': 'No shop found for this shopkeeper'
+        }, status=status.HTTP_404_NOT_FOUND)
     
     shop_customers = ShopCustomer.objects.filter(shop=shop)
     serializer = ShopCustomerSerializer(shop_customers, many=True)
@@ -156,13 +155,19 @@ def shop_customers(request, pk):
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
-def remove_customer(request, pk, user_id):
-    shop = get_object_or_404(Shop, pk=pk)
-    
-    if shop.owner != request.user:
+def remove_customer(request, user_id):
+    """Remove customer from shopkeeper's shop"""
+    if request.user.role != 'SHOPKEEPER':
         return Response({
-            'error': 'Only shop owner can remove customers'
+            'error': 'Only shopkeepers can remove customers'
         }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        shop = request.user.shop
+    except Shop.DoesNotExist:
+        return Response({
+            'error': 'No shop found for this shopkeeper'
+        }, status=status.HTTP_404_NOT_FOUND)
     
     try:
         shop_customer = ShopCustomer.objects.get(shop=shop, customer_id=user_id)
@@ -178,6 +183,7 @@ def remove_customer(request, pk, user_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_shops(request):
+    """List shops a customer has joined"""
     if request.user.role != 'CUSTOMER':
         return Response({
             'error': 'Only customers can view joined shops'
