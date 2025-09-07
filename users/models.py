@@ -16,7 +16,7 @@ class UserManager(BaseUserManager):
         if password:
             user.set_password(password)
         else:
-            user.set_unusable_password()  # For OTP-only users
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 

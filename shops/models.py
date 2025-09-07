@@ -7,16 +7,13 @@ def generate_shop_id():
     return str(uuid.uuid4())[:8].upper()
 
 class Shop(models.Model):
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_shops')
+    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='shop')  # Changed to OneToOneField
     name = models.CharField(max_length=100)
     address = models.TextField()
     description = models.TextField(blank=True, null=True)
     shop_logo_url = models.URLField(blank=True, null=True)
     shop_id = models.CharField(max_length=8, unique=True, default=generate_shop_id)
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ['owner', 'name']
     
     def clean(self):
         super().clean()
