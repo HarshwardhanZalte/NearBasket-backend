@@ -141,5 +141,6 @@ def update_profile(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def tigger_job(request):
     return Response({'message': 'Job triggered successfully'}, status=status.HTTP_200_OK)
